@@ -334,8 +334,10 @@ ngx_http_upstream_fair_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data)
     /* tree->insert = ngx_http_upstream_fair_rbtree_insert; */
     /* shm_zone->data = tree; */
     /* ngx_http_upstream_fair_rbtree = tree; */
-	u_char shared_hello[] = HELLO_WORLD;
-	shm_zone->data = (void *) "Mimida";
+	/* u_char shared_hello[] = HELLO_WORLD; */
+	if(shm_zone->data == NULL) {
+		shm_zone->data = (void *) "hello shared memory segment";
+	}
 
     return NGX_OK;
 }

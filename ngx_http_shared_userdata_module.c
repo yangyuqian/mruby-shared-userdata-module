@@ -5,6 +5,7 @@
 
 #define HELLO_WORLD "i love nginx modules"
 
+static ngx_uint_t ngx_http_upstream_fair_shm_size;
 static char *ngx_http_shared_userdata(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_http_init_shared_userdata(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static ngx_int_t ngx_http_shared_userdata_handler(ngx_http_request_t *r);
@@ -16,8 +17,6 @@ typedef struct {
     ngx_uint_t                          fails;
     ngx_uint_t                          current_weight;
 } ngx_http_upstream_fair_shared_t;
-
-typedef struct ngx_http_upstream_fair_peers_s ngx_http_upstream_fair_peers_t;
 
 typedef struct {
     ngx_rbtree_node_t                   node;
@@ -32,25 +31,6 @@ typedef struct {
 /* ngx_spinlock is defined without a matching unlock primitive */
 #define ngx_spinlock_unlock(lock)       (void) ngx_atomic_cmp_set(lock, ngx_pid, 0)
 
-typedef struct {
-    ngx_http_upstream_fair_shared_t    *shared;
-    struct sockaddr                    *sockaddr;
-    socklen_t                           socklen;
-    ngx_str_t                           name;
-
-    ngx_uint_t                          weight;
-    ngx_uint_t                          max_fails;
-    time_t                              fail_timeout;
-
-    time_t                              accessed;
-    ngx_uint_t                          down:1;
-
-#if (NGX_HTTP_SSL)
-    ngx_ssl_session_t                  *ssl_session;    /* local to a process */
-#endif
-
-} ngx_http_upstream_fair_peer_t;
-
 #define NGX_HTTP_UPSTREAM_FAIR_NO_RR            (1<<26)
 #define NGX_HTTP_UPSTREAM_FAIR_WEIGHT_MODE_IDLE (1<<27)
 #define NGX_HTTP_UPSTREAM_FAIR_WEIGHT_MODE_PEAK (1<<28)
@@ -58,49 +38,8 @@ typedef struct {
 
 enum { WM_DEFAULT = 0, WM_IDLE, WM_PEAK };
 
-struct ngx_http_upstream_fair_peers_s {
-    ngx_http_upstream_fair_shm_block_t *shared;
-    ngx_uint_t                          current;
-    ngx_uint_t                          size_err:1;
-    ngx_uint_t                          no_rr:1;
-    ngx_uint_t                          weight_mode:2;
-    ngx_uint_t                          number;
-    ngx_str_t                          *name;
-    ngx_http_upstream_fair_peers_t     *next;           /* for backup peers support, not really used yet */
-    ngx_http_upstream_fair_peer_t       peer[1];
-};
-
-typedef struct {
-	ngx_str_t *msg;
-} hello_s;
-
 #define NGX_PEER_INVALID (~0UL)
 
-typedef struct {
-    ngx_http_upstream_fair_peers_t     *peers;
-    ngx_uint_t                          current;
-    uintptr_t                          *tried;
-    uintptr_t                          *done;
-    uintptr_t                           data;
-    uintptr_t                           data2;
-} ngx_http_upstream_fair_peer_data_t;
-
-
-
-#if (NGX_HTTP_EXTENDED_STATUS)
-static ngx_chain_t *ngx_http_upstream_fair_report_status(ngx_http_request_t *r,
-    ngx_int_t *length);
-#endif
-
-#if (NGX_HTTP_SSL)
-static ngx_int_t ngx_http_upstream_fair_set_session(ngx_peer_connection_t *pc,
-    void *data);
-static void ngx_http_upstream_fair_save_session(ngx_peer_connection_t *pc,
-    void *data);
-#endif
-
-
-static ngx_uint_t ngx_http_upstream_fair_shm_size;
 static ngx_shm_zone_t * ngx_http_upstream_fair_shm_zone;
 
 #define NGX_BITVECTOR_ELT_SIZE (sizeof(uintptr_t) * 8)
@@ -123,14 +62,6 @@ ngx_http_upstream_fair_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data)
 
     return NGX_OK;
 }
-
-
-#define SCHED_COUNTER_BITS 20
-#define SCHED_NREQ_MAX ((~0UL) >> SCHED_COUNTER_BITS)
-#define SCHED_COUNTER_MAX ((1 << SCHED_COUNTER_BITS) - 1)
-#define SCHED_SCORE(nreq,delta) (((nreq) << SCHED_COUNTER_BITS) | (~(delta) & SCHED_COUNTER_MAX))
-#define ngx_upstream_fair_min(a,b) (((a) < (b)) ? (a) : (b))
-
 
 /* vim: set et ts=4 sw=4: */
 

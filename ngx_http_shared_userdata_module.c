@@ -70,6 +70,9 @@ struct ngx_http_upstream_fair_peers_s {
     ngx_http_upstream_fair_peer_t       peer[1];
 };
 
+typedef struct {
+	u_char *msg;
+} hello_s;
 
 #define NGX_PEER_INVALID (~0UL)
 
@@ -308,8 +311,8 @@ ngx_http_upstream_fair_init_module(ngx_cycle_t *cycle)
 static ngx_int_t
 ngx_http_upstream_fair_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data)
 {
-    /* ngx_slab_pool_t                *shpool; */
-    /* ngx_rbtree_t                   *tree; */
+    ngx_slab_pool_t                *shpool;
+    hello_s                   *hello_data;
     /* ngx_rbtree_node_t              *sentinel; */
     /*  */
     /* if (data) { */
@@ -317,8 +320,9 @@ ngx_http_upstream_fair_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data)
     /*     return NGX_OK; */
     /* } */
 
-    /* shpool = (ngx_slab_pool_t *) shm_zone->shm.addr; */
-    /* tree = ngx_slab_alloc(shpool, sizeof *tree); */
+    shpool = (ngx_slab_pool_t *) shm_zone->shm.addr;
+    hello_data = ngx_slab_alloc(shpool, sizeof *hello_data);
+	hello_data->msg = (u_char *) "0123456789";
     /* if (tree == NULL) { */
     /*     return NGX_ERROR; */
     /* } */
@@ -336,7 +340,7 @@ ngx_http_upstream_fair_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data)
     /* ngx_http_upstream_fair_rbtree = tree; */
 	/* u_char shared_hello[] = HELLO_WORLD; */
 	if(shm_zone->data == NULL) {
-		shm_zone->data = (void *) "hello shared memory segment";
+		shm_zone->data = hello_data;
 	}
 
     return NGX_OK;
@@ -1433,7 +1437,7 @@ static ngx_int_t ngx_http_shared_userdata_handler(ngx_http_request_t *r)
     ngx_buf_t *b;
     ngx_chain_t out;
 
-	sleep(5);
+	sleep(1);
 
     /* Set the Content-Type header. */
     r->headers_out.content_type.len = sizeof("text/plain") - 1;
@@ -1447,7 +1451,10 @@ static ngx_int_t ngx_http_shared_userdata_handler(ngx_http_request_t *r)
     out.next = NULL; /* just one buffer */
 
 	u_char *hello;
-	hello = ngx_http_upstream_fair_shm_zone->data;
+	hello_s *hello_b;
+	// FIXME: dereference of pointers
+	hello_b = (hello_s *)ngx_http_upstream_fair_shm_zone->data;
+	hello = (*hello_b).msg;
 
     b->pos = hello; /* first position in memory of the data */
     b->last = hello + sizeof(hello); /* last position in memory of the data */

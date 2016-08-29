@@ -2,9 +2,6 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
-
-#define HELLO_WORLD "i love nginx modules"
-
 static ngx_uint_t ngx_http_upstream_fair_shm_size;
 static char *ngx_http_shared_userdata(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_http_init_shared_userdata(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
@@ -31,18 +28,9 @@ typedef struct {
 /* ngx_spinlock is defined without a matching unlock primitive */
 #define ngx_spinlock_unlock(lock)       (void) ngx_atomic_cmp_set(lock, ngx_pid, 0)
 
-#define NGX_HTTP_UPSTREAM_FAIR_NO_RR            (1<<26)
-#define NGX_HTTP_UPSTREAM_FAIR_WEIGHT_MODE_IDLE (1<<27)
-#define NGX_HTTP_UPSTREAM_FAIR_WEIGHT_MODE_PEAK (1<<28)
-#define NGX_HTTP_UPSTREAM_FAIR_WEIGHT_MODE_MASK ((1<<27) | (1<<28))
-
 enum { WM_DEFAULT = 0, WM_IDLE, WM_PEAK };
 
-#define NGX_PEER_INVALID (~0UL)
-
 static ngx_shm_zone_t * ngx_http_upstream_fair_shm_zone;
-
-#define NGX_BITVECTOR_ELT_SIZE (sizeof(uintptr_t) * 8)
 
 static ngx_int_t
 ngx_http_upstream_fair_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data)

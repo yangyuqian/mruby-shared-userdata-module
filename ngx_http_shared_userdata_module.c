@@ -71,7 +71,7 @@ struct ngx_http_upstream_fair_peers_s {
 };
 
 typedef struct {
-	u_char *msg;
+	ngx_str_t *msg;
 } hello_s;
 
 #define NGX_PEER_INVALID (~0UL)
@@ -172,85 +172,6 @@ static ngx_shm_zone_t * ngx_http_upstream_fair_shm_zone;
 static ngx_rbtree_t * ngx_http_upstream_fair_rbtree;
 static ngx_uint_t ngx_http_upstream_fair_generation;
 
-/* static int */
-/* ngx_http_upstream_fair_compare_rbtree_node(const ngx_rbtree_node_t *v_left, */
-/*     const ngx_rbtree_node_t *v_right) */
-/* { */
-/*     ngx_http_upstream_fair_shm_block_t *left, *right; */
-/*  */
-/*     left = (ngx_http_upstream_fair_shm_block_t *) v_left; */
-/*     right = (ngx_http_upstream_fair_shm_block_t *) v_right; */
-/*  */
-/*     if (left->generation < right->generation) { */
-/*         return -1; */
-/*     } else if (left->generation > right->generation) { */
-/*         return 1; */
-/*     } else { #<{(| left->generation == right->generation |)}># */
-/*         if (left->peers < right->peers) { */
-/*             return -1; */
-/*         } else if (left->peers > right->peers) { */
-/*             return 1; */
-/*         } else { */
-/*             return 0; */
-/*         } */
-/*     } */
-/* } */
-
-/*
- * generic functions start here
- */
-/* static void */
-/* ngx_rbtree_generic_insert(ngx_rbtree_node_t *temp, */
-/*     ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel, */
-/*     int (*compare)(const ngx_rbtree_node_t *left, const ngx_rbtree_node_t *right)) */
-/* { */
-/*     for ( ;; ) { */
-/*         if (node->key < temp->key) { */
-/*  */
-/*             if (temp->left == sentinel) { */
-/*                 temp->left = node; */
-/*                 break; */
-/*             } */
-/*  */
-/*             temp = temp->left; */
-/*  */
-/*         } else if (node->key > temp->key) { */
-/*  */
-/*             if (temp->right == sentinel) { */
-/*                 temp->right = node; */
-/*                 break; */
-/*             } */
-/*  */
-/*             temp = temp->right; */
-/*  */
-/*         } else { #<{(| node->key == temp->key |)}># */
-/*             if (compare(node, temp) < 0) { */
-/*  */
-/*                 if (temp->left == sentinel) { */
-/*                     temp->left = node; */
-/*                     break; */
-/*                 } */
-/*  */
-/*                 temp = temp->left; */
-/*  */
-/*             } else { */
-/*  */
-/*                 if (temp->right == sentinel) { */
-/*                     temp->right = node; */
-/*                     break; */
-/*                 } */
-/*  */
-/*                 temp = temp->right; */
-/*             } */
-/*         } */
-/*     } */
-/*  */
-/*     node->parent = temp; */
-/*     node->left = sentinel; */
-/*     node->right = sentinel; */
-/*     ngx_rbt_red(node); */
-/* } */
-
 #define NGX_BITVECTOR_ELT_SIZE (sizeof(uintptr_t) * 8)
 
 static uintptr_t *
@@ -312,7 +233,6 @@ static ngx_int_t
 ngx_http_upstream_fair_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data)
 {
     ngx_slab_pool_t                *shpool;
-    hello_s                   *hello_data;
     /* ngx_rbtree_node_t              *sentinel; */
     /*  */
     /* if (data) { */
@@ -320,9 +240,17 @@ ngx_http_upstream_fair_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data)
     /*     return NGX_OK; */
     /* } */
 
+	ngx_str_t *msg;
+
+
     shpool = (ngx_slab_pool_t *) shm_zone->shm.addr;
-    hello_data = ngx_slab_alloc(shpool, sizeof *hello_data);
-	hello_data->msg = (u_char *) "0123456789";
+    msg = ngx_slab_alloc(shpool, 10);
+	msg->len = 10;
+	msg->data = (u_char *) "0123456789";
+	
+	
+	
+
     /* if (tree == NULL) { */
     /*     return NGX_ERROR; */
     /* } */
@@ -340,7 +268,7 @@ ngx_http_upstream_fair_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data)
     /* ngx_http_upstream_fair_rbtree = tree; */
 	/* u_char shared_hello[] = HELLO_WORLD; */
 	if(shm_zone->data == NULL) {
-		shm_zone->data = hello_data;
+		shm_zone->data = msg;
 	}
 
     return NGX_OK;
@@ -1450,21 +1378,19 @@ static ngx_int_t ngx_http_shared_userdata_handler(ngx_http_request_t *r)
     out.buf = b;
     out.next = NULL; /* just one buffer */
 
-	u_char *hello;
-	hello_s *hello_b;
 	// FIXME: dereference of pointers
-	hello_b = (hello_s *)ngx_http_upstream_fair_shm_zone->data;
-	hello = (*hello_b).msg;
+	ngx_str_t *hello;
+	hello = (ngx_str_t *)ngx_http_upstream_fair_shm_zone->data;
 
-    b->pos = hello; /* first position in memory of the data */
-    b->last = hello + sizeof(hello); /* last position in memory of the data */
+    b->pos = hello->data; /* first position in memory of the data */
+    b->last = hello->data + 5; /* last position in memory of the data */
     b->memory = 1; /* content is in read-only memory */
     b->last_buf = 1; /* there will be no more buffers in the request */
 
     /* Sending the headers for the reply. */
     r->headers_out.status = NGX_HTTP_OK; /* 200 status code */
     /* Get the content length of the body. */
-    r->headers_out.content_length_n = sizeof(hello);
+    r->headers_out.content_length_n = 5;
     ngx_http_send_header(r); /* Send the headers */
 
     /* Send the body, and return the status code of the output filter chain. */

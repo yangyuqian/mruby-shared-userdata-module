@@ -2,6 +2,37 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
+#include <mruby.h>
+#include <mruby/compile.h>
+
+typedef enum code_type_t { NGX_MRB_CODE_TYPE_FILE, NGX_MRB_CODE_TYPE_STRING } code_type_t;
+
+typedef struct ngx_mrb_state_t {
+  mrb_state *mrb;
+  int ai;
+} ngx_mrb_state_t;
+
+typedef struct ngx_mrb_code_t {
+  union code {
+    char *file;
+    char *string;
+  } code;
+  code_type_t code_type;
+  int n;
+  unsigned int cache;
+  struct RProc *proc;
+  mrbc_context *ctx;
+} ngx_mrb_code_t;
+
+typedef struct ngx_http_mruby_main_conf_t {
+  ngx_mrb_state_t *state;
+  ngx_mrb_code_t *init_code;
+  ngx_mrb_code_t *init_worker_code;
+  ngx_mrb_code_t *exit_worker_code;
+  ngx_int_t enabled_header_filter;
+  ngx_int_t enabled_body_filter;
+} ngx_http_mruby_main_conf_t;
+
 static ngx_uint_t ngx_http_upstream_fair_shm_size;
 static char *ngx_http_shared_userdata(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_http_init_shared_userdata(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
@@ -82,9 +113,11 @@ static ngx_command_t ngx_http_shared_userdata_commands[] = {
 /* The hello world string. */
 /* static u_char ngx_shared_userdata[] = HELLO_WORLD; */
 
+static ngx_int_t ngx_http_shared_userdata_preinit(ngx_conf_t *cf);
+
 /* The module context. */
 static ngx_http_module_t ngx_http_shared_userdata_module_ctx = {
-    NULL, /* preconfiguration */
+    ngx_http_shared_userdata_preinit, /* preconfiguration */
     NULL, /* postconfiguration */
 
     NULL, /* create main configuration */
@@ -113,6 +146,42 @@ ngx_module_t ngx_http_shared_userdata_module = {
     NULL, /* exit master */
     NGX_MODULE_V1_PADDING
 };
+
+/* static void ngx_http_mruby_cleanup(void *data) { */
+/* 	mrb_state *mrb = data; */
+/* 	mrb_close(mrb); */
+/* } */
+
+
+static ngx_int_t ngx_http_mruby_shared_state_init(ngx_mrb_state_t *state){
+
+	return NGX_OK;
+}
+
+
+static ngx_int_t ngx_http_shared_userdata_preinit(ngx_conf_t *cf) {
+	ngx_int_t rc;
+	ngx_http_mruby_main_conf_t *mmcf;
+	ngx_pool_cleanup_t *cln;
+
+	cln = ngx_pool_cleanup_add(cf->pool, 0);
+	if (cln == NULL) {
+		return NGX_ERROR;
+	}
+
+	mmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_shared_userdata_module);
+
+	rc = ngx_http_mruby_shared_state_init(mmcf->state);
+	if (rc == NGX_ERROR) {
+		return NGX_ERROR;
+	}
+    /*  */
+    /*  */
+	/* cln->handler = ngx_http_mruby_cleanup; */
+	/* cln->data = mmcf->state->mrb; */
+	
+	return NGX_OK;
+}
 
 /**
  * Content handler.
